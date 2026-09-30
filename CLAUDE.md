@@ -12,5 +12,4 @@ InvestFeed AI 투자 비서의 Python 서비스. 설계 문서는 `../investfeed
 
 ## 명령
 - 실행: `uv run assistant   # = uvicorn app.main:app, host/port 는 .env (HOST, PORT), --reload`
-- 테스트: `uv run pytest`
 - 린트: `uv run ruff check`

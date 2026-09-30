@@ -13,10 +13,9 @@ uv sync
 uv run assistant   # = uvicorn app.main:app, host/port 는 .env (HOST, PORT), --reload
 ```
 
-## 테스트·린트
+## 린트
 
 ```bash
-uv run pytest
 uv run ruff check
 ```
 
