@@ -21,6 +21,17 @@ class Settings(BaseSettings):
     jwks_cache_seconds: int = 3600
     core_timeout_seconds: float = 5.0
 
+    # 5단계 Q&A (2026-09-30 확정)
+    assistant_model: str = "claude-sonnet-5-5"
+    assistant_effort: str = "low"  # 질문 해석(분류)만 하므로 low 부터
+    assistant_max_tokens: int = 4096
+    llm_timeout_seconds: float = 15.0
+    chat_timeout_seconds: float = 20.0  # 턴 전체. 넘으면 끝난 카드만
+    rate_per_minute: int = 10  # 회원별 LLM 호출
+    monthly_cost_cap_usd: float = 30.0  # 서비스 전체 (API 키 1개)
+    session_ttl_seconds: int = 1800  # 30분 무활동이면 세션 초기화
+    history_token_budget: int = 4000  # 턴 이력 compact 발동 기준
+
 
 @lru_cache
 def get_settings() -> Settings:

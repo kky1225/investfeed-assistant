@@ -20,6 +20,7 @@ class ToolResult:
     data: Any = None
     error: str | None = None
     candidates: list[dict[str, Any]] | None = None
+    query: str | None = None  # 후보를 낸 종목 검색어
     as_of: str | None = None
     source: str | None = None
 
@@ -30,6 +31,7 @@ class ToolResult:
             data=body.get("data"),
             error=body.get("error"),
             candidates=body.get("candidates"),
+            query=body.get("query"),
             as_of=body.get("asOf"),
             source=body.get("source"),
         )
@@ -50,9 +52,21 @@ class CoreClient:
                 continue
             if isinstance(v, list):
                 params.extend((k, str(x)) for x in v)
+            elif isinstance(v, bool):
+                params.append((k, "true" if v else "false"))
             else:
                 params.append((k, str(v)))
         res = await self._client.get(spec.path, params=params, headers={"Authorization": f"Bearer {token}"})
+        if res.status_code == 401:
+            return ToolResult(ok=False, error="비서 토큰이 유효하지 않습니다")
+        res.raise_for_status()
+        return ToolResult.from_envelope(res.json())
+
+    async def save_turn(self, token: str, body: dict[str, Any]) -> ToolResult:
+        """턴 종료 시 Kotlin 타임라인·사용량 로그에 저장 (POST /internal/assistant/timeline/turns)"""
+        res = await self._client.post(
+            "/internal/assistant/timeline/turns", json=body, headers={"Authorization": f"Bearer {token}"}
+        )
         if res.status_code == 401:
             return ToolResult(ok=False, error="비서 토큰이 유효하지 않습니다")
         res.raise_for_status()

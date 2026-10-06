@@ -1,6 +1,6 @@
-"""도구 레지스트리 (명세 3.2, 4단계 확정본 — 데이터 7 · 표시 4 · 실행 1).
+"""도구 레지스트리 (명세 3.2, 4단계 확정본 — 데이터 8 · 표시 4 · 실행 1).
 
-5단계 해석 노드가 이 목록을 그대로 모델에 넘긴다(Anthropic tool 형식). 인자 검증은 스키마(required·enum)가 맡고,
+5단계 해석 노드가 이 목록을 그대로 모델에 넘긴다(Anthropic tool 형식, strict). 인자 검증은 스키마(required·enum)가 맡고,
 값 검증·종목명 확정은 Kotlin 이 한다. 데이터 도구는 공개 데이터 JSON, 표시 도구는 카드 참조 ID 만 돌려준다 (C-01).
 LLM 문장 생성은 없다 — 도구 선택만 (A안, 2026-09-28).
 """
@@ -22,22 +22,42 @@ class ToolSpec:
     kind: ToolKind
     path: str  # Kotlin /internal/assistant/tools/<...>
     description: str  # 모델이 도구를 고르는 근거 — 예시 발화 포함
-    input_schema: dict[str, Any] = field(default_factory=lambda: {"type": "object", "properties": {}})
+    input_schema: dict[str, Any] = field(
+        default_factory=lambda: {"type": "object", "properties": {}, "additionalProperties": False}
+    )
 
     def to_anthropic(self) -> dict[str, Any]:
-        return {"name": self.name, "description": self.description, "input_schema": self.input_schema}
+        """strict 도구. 수치·길이·배열 제약은 strict 가 지원하지 않는다. 범위 검사는 Kotlin 이 한다 (DataToolService 상수)"""
+        return {
+            "name": self.name,
+            "description": self.description,
+            "input_schema": strip_unsupported(self.input_schema),
+            "strict": True,
+        }
+
+
+# strict 스키마가 지원하지 않는 키 (Anthropic 구조화 출력 제한)
+_UNSUPPORTED = {"minimum", "maximum", "multipleOf", "minLength", "maxLength", "minItems", "maxItems"}
+
+
+def strip_unsupported(schema: Any) -> Any:
+    if isinstance(schema, dict):
+        return {k: strip_unsupported(v) for k, v in schema.items() if k not in _UNSUPPORTED}
+    if isinstance(schema, list):
+        return [strip_unsupported(v) for v in schema]
+    return schema
 
 
 def _obj(properties: dict[str, Any], required: list[str] | None = None) -> dict[str, Any]:
     return {"type": "object", "properties": properties, "required": required or [], "additionalProperties": False}
 
 
+# 인자 범위의 기준은 Kotlin DataToolService 상수(MAX_STOCKS 등)다. 여기 설명 문구의 숫자("1~3개" 등)는
+# 모델이 인자를 고르는 안내일 뿐이니, Kotlin 값을 바꾸면 문구도 같이 바꾼다 (2026-10-04, Python 범위 검사 제거).
 _STOCK_QUERY = {"type": "string", "description": "종목명·별칭·코드·티커 (삼성전자, 삼전, 005930, TLT, 비트코인)"}
 _STOCK_QUERIES = {
     "type": "array",
     "items": _STOCK_QUERY,
-    "minItems": 1,
-    "maxItems": 3,
     "description": "종목 1~3개. 비교 질문이면 여러 개",
 }
 _MARKET_HINT = {"type": "string", "enum": ["KR", "US", "CRYPTO"], "description": "질문에서 시장이 분명할 때만"}
@@ -53,9 +73,18 @@ _SPECS: list[ToolSpec] = [
         "get_market_summary",
         ToolKind.DATA,
         "/internal/assistant/tools/get_market_summary",
-        "국내 지수(코스피·코스닥) 현재 값·등락과 외국인/기관/개인 순매수. "
-        "예: '코스피 지금 얼마야', '오늘 장 어땠어', '코스닥 수급'",
-        _obj({"market": {"type": "string", "enum": ["KOSPI", "KOSDAQ"], "description": "미지정이면 KOSPI"}}),
+        "국내 지수 현재 값·등락과 외국인/기관/개인 순매수. "
+        "예: '코스피 지금 얼마야', '코스닥 수급', '국내 지수 몇이야', '오늘 장 어땠어'",
+        _obj(
+            {
+                "market": {
+                    "type": "string",
+                    "enum": ["KOSPI", "KOSDAQ"],
+                    "description": "코스피만 물으면 KOSPI, 코스닥만 물으면 KOSDAQ. "
+                    "'국내 지수', '오늘 장'처럼 시장을 특정하지 않으면 비운다(둘 다)",
+                }
+            }
+        ),
     ),
     ToolSpec(
         "get_market_investor_flow",
@@ -76,9 +105,7 @@ _SPECS: list[ToolSpec] = [
                 "side": {"type": "string", "enum": ["BUY", "SELL"], "description": "순매수/순매도. 미지정이면 BUY"},
                 "minStreakDays": {
                     "type": "integer",
-                    "minimum": 2,
-                    "maximum": 20,
-                    "description": "'N일 연속' 조건. 외국인·기관만",
+                    "description": "'N일 연속' 조건(2~20일). 외국인·기관만",
                 },
             },
             ["investor"],
@@ -101,7 +128,7 @@ _SPECS: list[ToolSpec] = [
         _obj(
             {
                 "stockQuery": _STOCK_QUERIES,
-                "days": {"type": "integer", "minimum": 1, "maximum": 10, "description": "최근 며칠. 미지정 5"},
+                "days": {"type": "integer", "description": "최근 며칠(1~10). 미지정 5"},
             },
             ["stockQuery"],
         ),
@@ -116,12 +143,22 @@ _SPECS: list[ToolSpec] = [
         "get_calendar",
         ToolKind.DATA,
         "/internal/assistant/tools/get_calendar",
-        "경제 일정(지표 발표·금리 결정·휴장). 예: '이번 주 일정', 'FOMC 언제야', '다음 달 CPI 발표일'",
+        "경제 일정(지표 발표·금리 결정·휴장). "
+        "예: '이번 주 일정', 'FOMC 언제야', '다음 달 CPI 발표일', '이번 달 휴장일', '미국 증시 쉬는 날'",
         _obj(
             {
                 "from": {"type": "string", "format": "date", "description": "YYYY-MM-DD"},
                 "to": {"type": "string", "format": "date", "description": "YYYY-MM-DD. 최대 3개월"},
-                "keyword": {"type": "string", "description": "이벤트명 부분 일치 (FOMC, CPI)"},
+                "keyword": {
+                    "type": "string",
+                    "description": "이벤트명 부분 일치 (FOMC, CPI). 휴장·금리 결정은 type 으로",
+                },
+                "type": {
+                    "type": "string",
+                    "enum": ["INDICATOR", "HOLIDAY", "MEETING"],
+                    "description": "INDICATOR=지표 발표(CPI·고용·GDP), HOLIDAY=휴장일, MEETING=금리 결정(FOMC·금통위)",
+                },
+                "country": {"type": "string", "enum": ["KR", "US"], "description": "국내/미국. 질문에 있을 때만"},
             },
             ["from", "to"],
         ),
@@ -147,7 +184,7 @@ _SPECS: list[ToolSpec] = [
         ToolKind.DATA,
         "/internal/assistant/tools/search_news",
         "뉴스 검색 (제목·날짜·링크, 최대 5건). 예: '삼성전자 뉴스', '반도체 뉴스 있어'",
-        _obj({"query": {"type": "string"}, "n": {"type": "integer", "minimum": 1, "maximum": 5}}, ["query"]),
+        _obj({"query": {"type": "string"}, "n": {"type": "integer", "description": "개수(1~5). 미지정 5"}}, ["query"]),
     ),
     # ── 표시 도구 (개인 데이터 → 카드 참조) ──
     ToolSpec(
@@ -208,7 +245,7 @@ _SPECS: list[ToolSpec] = [
         _obj(
             {
                 "stockQuery": _STOCK_QUERY,
-                "price": {"type": "integer", "minimum": 1, "description": "목표가 (원)"},
+                "price": {"type": "integer", "description": "목표가 (원, 0보다 큼)"},
                 "direction": {"type": "string", "enum": ["ABOVE", "BELOW"], "description": "이상/이하 도달"},
             },
             ["stockQuery", "price", "direction"],
