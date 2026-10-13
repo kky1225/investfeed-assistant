@@ -256,6 +256,12 @@ _SPECS: list[ToolSpec] = [
 REGISTRY: dict[str, ToolSpec] = {t.name: t for t in _SPECS}
 
 
+def requires_personal(name: str) -> bool:
+    """개인 도구(표시·실행)인가 — 2차 인증 토큰이 있어야 실행한다. Kotlin ServiceTokenFilter 도 같은 기준으로 막는다"""
+    spec = REGISTRY.get(name)
+    return spec is not None and spec.kind != ToolKind.DATA
+
+
 def anthropic_tools() -> list[dict[str, Any]]:
     """5단계 해석 노드용 — 모델에 넘길 도구 목록"""
     return [t.to_anthropic() for t in _SPECS]

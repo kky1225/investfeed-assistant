@@ -34,7 +34,8 @@ class TurnContext:
     session: ChatSession
     queue: asyncio.Queue[tuple[str, dict[str, Any]] | None]
 
-    route: str = "ERROR"  # TOOL / REJECT / ASK_USER / PICK / BLOCKED / ERROR
+    personal: bool = False  # 2차 인증 토큰인가. 아니면 개인 도구는 실행하지 않고 인증을 요청한다
+    route: str = "ERROR"  # TOOL / REJECT / ASK_USER / PICK / AUTH_REQUIRED / RESUME / BLOCKED / ERROR
     reason: str | None = None
     reply: str = ""
     cards: list[dict[str, Any]] = field(default_factory=list)

@@ -1,6 +1,6 @@
 """대화 세션 — Redis 단순 키 ASSISTANT:CHAT:{memberId}, 30분 무활동이면 만료.
 
-담는 것: 턴 이력 {질문 원문, 도구, 인자}, 슬롯(종목·투자자·기간), 종목 선택 대기 중인 도구 호출.
+담는 것: 턴 이력 {질문 원문, 도구, 인자}, 슬롯(종목·투자자·기간), 종목 선택·2차 인증 대기 중인 도구 호출.
 담지 않는 것: 도구 결과 값·답변 문장·개인 데이터 (C-01). 사용자가 직접 쓴 질문은 예외.
 """
 
@@ -51,15 +51,25 @@ class Pending:
 
 
 @dataclass
+class AuthPending:
+    """2차 인증 대기 — 시장 토큰으로 개인 도구가 선택된 질문. 인증되면 LLM 재호출 없이 calls 를 실행"""
+
+    question: str
+    calls: list[ToolCall]
+
+
+@dataclass
 class ChatSession:
     turns: list[Turn] = field(default_factory=list)
     slots: dict[str, str] = field(default_factory=dict)  # stock / investor / period
     pending: Pending | None = None
+    auth_pending: AuthPending | None = None
 
     @classmethod
     def from_json(cls, raw: str) -> ChatSession:
         d = json.loads(raw)
         p = d.get("pending")
+        a = d.get("auth_pending")
         return cls(
             turns=[Turn(t["q"], [ToolCall(**c) for c in t["tools"]]) for t in d.get("turns", [])],
             slots=d.get("slots", {}),
@@ -67,6 +77,7 @@ class ChatSession:
                 [ToolCall(**c) for c in p["calls"]], p["query"], p["candidates"],
                 [PendingItem(ToolCall(**i["call"]), i["query"], i["candidates"]) for i in p.get("later", [])],
             ) if p else None,
+            auth_pending=AuthPending(a["question"], [ToolCall(**c) for c in a["calls"]]) if a else None,
         )
 
     def to_json(self) -> str:

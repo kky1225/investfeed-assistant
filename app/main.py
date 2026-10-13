@@ -13,7 +13,7 @@ from redis.asyncio import Redis
 from sse_starlette.sse import EventSourceResponse
 
 from app.auth.deps import CurrentPrincipal
-from app.auth.jwks import JwksVerifier, http_fetcher
+from app.auth.jwks import SCOPE_PERSONAL, JwksVerifier, http_fetcher
 from app.chat.context import Deps, TurnContext
 from app.chat.guard import Guard
 from app.chat.session import SessionStore
@@ -65,6 +65,7 @@ class PickReq(BaseModel):
 class ChatReq(BaseModel):
     message: str = Field(min_length=1, max_length=500)
     pick: PickReq | None = None
+    resume: bool = False  # 2차 인증 후 이어서 실행 — 대기 중 도구 호출을 LLM 재호출 없이 실행
 
 
 @app.get("/assistant/health")
@@ -84,6 +85,7 @@ async def chat(req: ChatReq, principal: CurrentPrincipal):
         deps=deps,
         member_id=principal.member_id,
         token=principal.token,
+        personal=principal.scope == SCOPE_PERSONAL,
         request_id=request_id,
         question=req.message.strip(),
         session=await deps.store.load(principal.member_id),
@@ -91,7 +93,7 @@ async def chat(req: ChatReq, principal: CurrentPrincipal):
     )
     pick = req.pick.model_dump() if req.pick else None
     # 처리(run_turn)는 SSE 연결과 분리된 백그라운드 작업 — 처리 쪽이 큐에 이벤트를 넣고, 아래 stream() 이 꺼내 보낸다
-    task = asyncio.create_task(run_turn(app.state.graph, deps, ctx, pick))
+    task = asyncio.create_task(run_turn(app.state.graph, deps, ctx, pick, req.resume))
     app.state.tasks.add(task)
     task.add_done_callback(app.state.tasks.discard)
 

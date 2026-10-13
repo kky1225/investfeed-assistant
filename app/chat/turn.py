@@ -41,17 +41,19 @@ def _record_history(ctx: TurnContext, calls: list[dict[str, Any]]) -> None:
         if ctx.picked_name:
             ctx.session.slots["stock"] = ctx.picked_name
         return
+    if ctx.route == "AUTH_REQUIRED":  # 아직 실행 전 — 인증 후 이어서 실행(RESUME)될 때 남긴다
+        return
     if ctx.route == "REJECT":
         ctx.session.turns.append(Turn(ctx.question, [ToolCall(REJECT_TOOL, {"reason": ctx.reason})]))
     elif ctx.route == "ASK_USER":
         ctx.session.turns.append(Turn(ctx.question, [ToolCall(ASK_TOOL, {"missing": ctx.reason})]))
-    elif calls:  # TOOL 또는 실행 중 타임아웃
+    elif calls:  # TOOL·RESUME 또는 실행 중 타임아웃
         tool_calls = [ToolCall(c["name"], c["args"]) for c in calls]
         ctx.session.turns.append(Turn(ctx.question, tool_calls))
         update_slots(ctx.session, tool_calls)
 
 
-async def run_turn(graph, deps: Deps, ctx: TurnContext, pick: dict[str, Any] | None) -> None:
+async def run_turn(graph, deps: Deps, ctx: TurnContext, pick: dict[str, Any] | None, resume: bool = False) -> None:
     started = time.monotonic()
     state: dict[str, Any] = {}
     try:
@@ -59,7 +61,7 @@ async def run_turn(graph, deps: Deps, ctx: TurnContext, pick: dict[str, Any] | N
             # ainvoke 대신 astream: 단계마다 상태를 받아 두어, 실행 중 타임아웃이 나도 interpret 까지의 상태(calls)가 남는다
             # → _record_history 가 "이 질문에 이 도구를 쓰려 했다"를 이력에 남겨 다음 질문이 이어받는다
             async for chunk in graph.astream(
-                {"member_id": ctx.member_id, "question": ctx.question, "pick": pick},
+                {"member_id": ctx.member_id, "question": ctx.question, "pick": pick, "resume": resume},
                 config={"configurable": {"ctx": ctx}},
                 stream_mode="values",
             ):

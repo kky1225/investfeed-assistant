@@ -10,5 +10,6 @@ class ChatState(TypedDict, total=False):
     member_id: int
     question: str
     pick: dict[str, Any] | None  # 종목 선택 {code, market, name}
-    route: str  # INTERPRET / TOOL / REJECT / ASK_USER / PICK / BLOCKED / ERROR
+    resume: bool  # 2차 인증 후 이어서 실행 (대기 중 도구 호출을 LLM 없이 실행)
+    route: str  # INTERPRET / TOOL / REJECT / ASK_USER / PICK / AUTH_REQUIRED / RESUME / BLOCKED / ERROR
     calls: list[dict[str, Any]]  # [{name, args}]

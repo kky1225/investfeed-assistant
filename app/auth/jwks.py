@@ -14,6 +14,10 @@ import httpx
 import jwt
 from jwt import PyJWK
 
+# Kotlin AssistantTokenService 의 SCOPE_CHAT_MARKET / SCOPE_CHAT 와 같은 값
+SCOPE_MARKET = "chat.market"  # 로그인만으로 발급 — 공개 데이터(시세·수급·일정 등) 조회만 가능
+SCOPE_PERSONAL = "chat"  # 2차 인증 후 발급 — 위에 더해 개인 데이터(계좌·보유·실현손익) 조회까지 가능
+
 
 class TokenError(Exception):
     """검증 실패. 상위에서 401 로 바꾼다."""
@@ -75,7 +79,7 @@ class JwksVerifier:
         except (TypeError, ValueError) as e:
             raise TokenError("sub must be memberId") from e
         return Principal(
-            member_id=member_id, scope=str(claims.get("scope", "chat")), jti=claims.get("jti"), token=token
+            member_id=member_id, scope=str(claims.get("scope", SCOPE_MARKET)), jti=claims.get("jti"), token=token
         )
 
     def _key(self, kid: str) -> PyJWK:
