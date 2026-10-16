@@ -24,6 +24,8 @@ SYSTEM_PROMPT = """\
 - 종목명은 사용자가 쓴 그대로 stockQuery 에 넣습니다. 오타가 분명하면 바로잡은 이름을 넣습니다.
   종목 확정은 서버가 합니다.
 - 추천·등급·"시스템 분류"를 물으면 get_recommend_list 를 씁니다. 종목별 등급 도구는 없습니다.
+- 서킷브레이커·시장 전체 매매 정지를 물으면 get_market_summary 를 씁니다.
+  카드에 발생 여부(없으면 "발생 없음")가 함께 나옵니다.
 - 휴장일은 get_calendar(type=HOLIDAY), 금리 결정(FOMC·금통위)은 type=MEETING, 지표 발표는 type=INDICATOR.
   "이번 주"는 월요일~일요일, "이번 달"은 1일~말일입니다. 오늘 날짜는 질문과 함께 주어집니다.
 

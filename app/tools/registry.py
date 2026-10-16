@@ -73,8 +73,8 @@ _SPECS: list[ToolSpec] = [
         "get_market_summary",
         ToolKind.DATA,
         "/internal/assistant/tools/get_market_summary",
-        "국내 지수 현재 값·등락과 외국인/기관/개인 순매수. "
-        "예: '코스피 지금 얼마야', '코스닥 수급', '국내 지수 몇이야', '오늘 장 어땠어'",
+        "국내 지수 현재 값·등락과 외국인/기관/개인 순매수, 직전 개장일 서킷브레이커 발생 여부. "
+        "예: '코스피 지금 얼마야', '코스닥 수급', '국내 지수 몇이야', '오늘 장 어땠어', '서킷브레이커 걸렸어'",
         _obj(
             {
                 "market": {
