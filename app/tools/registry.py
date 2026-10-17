@@ -137,7 +137,7 @@ _SPECS: list[ToolSpec] = [
         "get_global_indexes",
         ToolKind.DATA,
         "/internal/assistant/tools/get_global_indexes",
-        "미국 지수(나스닥·S&P500·다우)·미국 국채 2/10년·환율·VIX 스냅샷. 예: '미국장 어때', '환율', '금리'",
+        "미국 지수(나스닥·S&P500·다우·필라델피아 반도체)·미국 국채 2/5/10/30년·환율 스냅샷. 예: '미국장 어때', '환율', '금리'",
     ),
     ToolSpec(
         "get_calendar",
