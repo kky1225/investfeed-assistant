@@ -29,6 +29,23 @@ class Interpretation:
     usage: Usage = field(default_factory=Usage)
 
 
+def dedupe_calls(calls: list[ToolCall]) -> list[ToolCall]:
+    """같은 도구를 겹쳐 고른 호출을 하나로 합친다 — 같은 카드가 두 번 나오지 않게.
+
+    완전히 같은 호출은 하나만 남기고, 같은 도구에서 한 호출의 인자가 다른 호출의 인자에 모두 포함되면
+    (예: 국채 {date} 와 {market: KR, date}) 더 구체적인 쪽만 남긴다. 인자가 서로 다르면(다른 종목 등) 둘 다 둔다.
+    """
+    kept: list[ToolCall] = []
+    for c in calls:
+        if any(k.name == c.name and c.args.items() <= k.args.items() for k in kept):
+            continue  # 이미 남긴 호출과 같거나 그보다 덜 구체적
+        kept = [k for k in kept if not (k.name == c.name and k.args.items() <= c.args.items())]
+        kept.append(c)
+    if len(kept) < len(calls):
+        log.info("겹치는 도구 호출 합침: %d → %d (%s)", len(calls), len(kept), ", ".join(k.name for k in kept))
+    return kept
+
+
 def build_user_text(question: str, session: ChatSession, today: date) -> str:
     parts = []
     if history := render_history(session):
@@ -88,4 +105,4 @@ async def interpret(
         return Interpretation("REJECT", [rej], reason=str(rej.args.get("reason")), usage=usage)
     if ask := next((c for c in calls if c.name == ASK_TOOL), None):
         return Interpretation("ASK_USER", [ask], reason=str(ask.args.get("missing")), usage=usage)
-    return Interpretation("TOOLS", calls, usage=usage)
+    return Interpretation("TOOLS", dedupe_calls(calls), usage=usage)

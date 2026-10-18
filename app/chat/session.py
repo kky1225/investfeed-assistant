@@ -110,6 +110,7 @@ def render_history(session: ChatSession) -> str:
 
 
 def render_slots(session: ChatSession) -> str:
+    # 날짜(slots["date"])는 모델에 보여 주지 않는다 — 코드가 대화 상태로 직접 맞춘다 (app.chat.date_context)
     labels = {"stock": "종목", "investor": "투자자", "period": "기간"}
     return " · ".join(f"{labels[k]}: {v}" for k, v in session.slots.items() if k in labels and v)
 

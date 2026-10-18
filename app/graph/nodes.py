@@ -14,6 +14,7 @@ from langgraph.config import get_config
 
 from app.chat import replies
 from app.chat.context import TurnContext
+from app.chat.date_context import apply_date_context
 from app.chat.execute import apply_stock_choice, run_tools_and_send_cards
 from app.chat.interpret import interpret as llm_interpret
 from app.chat.session import AuthPending, ToolCall, compact
@@ -103,6 +104,8 @@ async def interpret(state: ChatState) -> ChatState:
     ctx.reason = res.reason
     match res.kind:
         case "TOOLS":
+            # 조회 날짜는 대화 상태로 맞춘다 (날짜 표현이 없으면 앞 질문 날짜 유지, "최근"이면 해제)
+            res.calls, ctx.date_notice = apply_date_context(state["question"], res.calls, ctx.session)
             if _needs_auth(ctx, res.calls):
                 ctx.session.auth_pending = AuthPending(state["question"], res.calls)
                 _ask_auth(ctx, res.calls)
@@ -124,7 +127,10 @@ async def interpret(state: ChatState) -> ChatState:
 
 
 async def execute(state: ChatState) -> ChatState:
-    await run_tools_and_send_cards(_ctx(), _calls(state))
+    ctx = _ctx()
+    if ctx.date_notice:  # 화면은 reply 가 있는 카드를 말풍선으로 그린다
+        ctx.add_card({"kind": "DATE_CONTEXT", "payload": {"reply": ctx.date_notice}})
+    await run_tools_and_send_cards(ctx, _calls(state))
     return {}
 
 

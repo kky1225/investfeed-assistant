@@ -8,6 +8,7 @@ class RejectReason(StrEnum):
     OUT_OF_SCOPE = "OUT_OF_SCOPE"  # 투자 데이터와 무관, 설명·요약 요청
     PAPER_TRADE = "PAPER_TRADE"  # 모의투자·자동매매 (관리자 전용, C-12)
     GREETING = "GREETING"  # 인사
+    DATE_UNSUPPORTED = "DATE_UNSUPPORTED"  # 날짜 지정 조회를 아직 지원하지 않는 데이터
 
 
 class Missing(StrEnum):
@@ -16,6 +17,9 @@ class Missing(StrEnum):
     DIRECTION = "DIRECTION"
     PERIOD = "PERIOD"
     DATE_RANGE = "DATE_RANGE"
+    MARKET = "MARKET"  # 국내/미국 (서킷브레이커처럼 시장마다 답이 다른 질문)
+    INVESTOR = "INVESTOR"  # 외국인/기관 등 (투자자별 순위)
+    SIDE = "SIDE"  # 순매수/순매도 (투자자별 순위)
 
 
 REJECT_TEXT: dict[str, str] = {
@@ -23,6 +27,9 @@ REJECT_TEXT: dict[str, str] = {
     RejectReason.OUT_OF_SCOPE: "투자 데이터 관련 질문만 답할 수 있어요. 시세·수급·일정·내 계좌를 물어보세요.",
     RejectReason.PAPER_TRADE: "모의투자는 관리자 페이지에서 확인해 주세요.",
     RejectReason.GREETING: "네, 무엇을 조회해 드릴까요?",
+    RejectReason.DATE_UNSUPPORTED: (
+        "해당 데이터는 과거 날짜 조회를 지원하지 않습니다. 당일(최근) 데이터만 제공할 수 있습니다."
+    ),
 }
 
 ASK_TEXT: dict[str, str] = {
@@ -31,6 +38,9 @@ ASK_TEXT: dict[str, str] = {
     Missing.DIRECTION: "목표가 이상일 때와 이하일 때 중 언제 알려 드릴까요?",
     Missing.PERIOD: "기간을 알려 주세요. (예: 오늘, 최근 5일, 이달)",
     Missing.DATE_RANGE: "언제부터 언제까지의 일정인가요?",
+    Missing.MARKET: "국내와 미국 중 어느 시장인가요?",
+    Missing.INVESTOR: "외국인과 기관 중 어느 쪽인가요? (연기금·개인도 볼 수 있어요)",
+    Missing.SIDE: "순매수와 순매도 중 어느 쪽인가요?",
 }
 
 CHOOSE_STOCK = "어떤 종목인가요? 아래에서 골라 주세요."

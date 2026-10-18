@@ -55,6 +55,12 @@ async def run_tools_and_send_cards(ctx: TurnContext, calls: list[ToolCall]) -> N
             return
         if not result.ok:
             ctx.tool_errors += 1
+        # 문장으로 답하는 결과 ("발동하지 않았습니다", "휴장일입니다" 등) — Kotlin 이 data.reply 로 문장을 준다.
+        # 다른 카드와 함께 와도 사라지지 않게 카드로 흘려보내고(화면은 말풍선으로 그림), 저장 문장에도 이어 붙인다
+        # 카드와 함께 오는 안내(notice, 예: 여러 종목 중 미국만 휴장)도 저장 문장에 남긴다
+        data = result.data if result.ok and isinstance(result.data, dict) else {}
+        if text := data.get("reply") or data.get("notice"):
+            ctx.reply = f"{ctx.reply}\n{text}" if ctx.reply else text
         ctx.add_card(to_card(call, result))
 
     # 호출마다 작업을 만들어 동시에 실행하고, 전부 끝날 때까지 기다린다

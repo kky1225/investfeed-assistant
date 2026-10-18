@@ -1,4 +1,4 @@
-"""도구 레지스트리 (명세 3.2, 4단계 확정본 — 데이터 8 · 표시 4 · 실행 1).
+"""도구 레지스트리 (명세 3.2, 4단계 확정본 — 데이터 11 · 표시 4 · 실행 1).
 
 5단계 해석 노드가 이 목록을 그대로 모델에 넘긴다(Anthropic tool 형식, strict). 인자 검증은 스키마(required·enum)가 맡고,
 값 검증·종목명 확정은 Kotlin 이 한다. 데이터 도구는 공개 데이터 JSON, 표시 도구는 카드 참조 ID 만 돌려준다 (C-01).
@@ -25,15 +25,25 @@ class ToolSpec:
     input_schema: dict[str, Any] = field(
         default_factory=lambda: {"type": "object", "properties": {}, "additionalProperties": False}
     )
+    # strict 는 요청 전체에서 선택 인자 합계가 STRICT_OPTIONAL_LIMIT 이하여야 한다 (넘으면 API 400).
+    # 선택 인자가 많고 값 검증을 Kotlin 이 하는 도구만 False 로 둔다
+    strict: bool = True
 
     def to_anthropic(self) -> dict[str, Any]:
-        """strict 도구. 수치·길이·배열 제약은 strict 가 지원하지 않는다. 범위 검사는 Kotlin 이 한다 (DataToolService 상수)"""
+        """수치·길이·배열 제약은 strict 가 지원하지 않는다. 범위 검사는 Kotlin 이 한다 (DataToolService 상수)"""
         return {
             "name": self.name,
             "description": self.description,
             "input_schema": strip_unsupported(self.input_schema),
-            "strict": True,
+            "strict": self.strict,
         }
+
+    def optional_count(self) -> int:
+        required = set(self.input_schema.get("required", []))
+        return sum(1 for k in self.input_schema.get("properties", {}) if k not in required)
+
+
+STRICT_OPTIONAL_LIMIT = 24
 
 
 # strict 스키마가 지원하지 않는 키 (Anthropic 구조화 출력 제한)
@@ -67,14 +77,22 @@ _ASSET_CLASS = {
     "description": "국내주식/미국주식/코인. 미지정이면 전체",
 }
 
+# 날짜 지정 조회 공통 인자. 미지정이면 서버가 오늘(장 전·휴장일이면 직전 거래일)로 답한다
+_DATE = {
+    "type": "string",
+    "format": "date",
+    "description": "YYYY-MM-DD. 질문에 날짜('오늘', '어제', '10월 15일')가 있을 때 — '오늘'도 오늘 날짜를 넣는다. "
+    "'지금'·'현재'이거나 날짜가 없으면 비운다. 미국 시장은 '오늘'이면 비우고 직접 말한 날짜만(현지 날짜)",
+}
+
 _SPECS: list[ToolSpec] = [
     # ── 데이터 도구 ──
     ToolSpec(
         "get_market_summary",
         ToolKind.DATA,
         "/internal/assistant/tools/get_market_summary",
-        "국내 지수 현재 값·등락과 외국인/기관/개인 순매수, 직전 개장일 서킷브레이커 발생 여부. "
-        "예: '코스피 지금 얼마야', '코스닥 수급', '국내 지수 몇이야', '오늘 장 어땠어', '서킷브레이커 걸렸어'",
+        "국내 지수 값·등락과 외국인/기관/개인 순매수. 날짜를 주면 그날 종가·수급. "
+        "예: '코스피 지금 얼마야', '코스닥 수급', '국내 지수 몇이야', '오늘 장 어땠어', '10월 15일 코스피'",
         _obj(
             {
                 "market": {
@@ -82,53 +100,101 @@ _SPECS: list[ToolSpec] = [
                     "enum": ["KOSPI", "KOSDAQ"],
                     "description": "코스피만 물으면 KOSPI, 코스닥만 물으면 KOSDAQ. "
                     "'국내 지수', '오늘 장'처럼 시장을 특정하지 않으면 비운다(둘 다)",
-                }
+                },
+                "date": _DATE,
             }
+        ),
+    ),
+    ToolSpec(
+        "get_circuit_breakers",
+        ToolKind.DATA,
+        "/internal/assistant/tools/get_circuit_breakers",
+        "서킷브레이커(시장 전체 매매 정지) 발동 여부. 국내는 오늘(휴장일이면 직전 거래일) 코스피·코스닥, "
+        "미국은 진행 중이거나 직전 미국 장의 S&P500 기준 시장 전체(나스닥 단독 서킷브레이커는 없음). "
+        "예: '서킷브레이커 걸렸어', '오늘 코스피 서킷브레이커 발동했어', '10월 15일 코스피 서킷브레이커', "
+        "'미국 서킷브레이커 걸렸어'",
+        _obj(
+            {
+                "market": {
+                    "type": "string",
+                    "enum": ["KR", "US"],
+                    "description": "국내=KR(코스피·코스닥), 미국=US(나스닥·S&P500·다우 모두 US). "
+                    "질문·대화 맥락에 시장이 없으면 추측하지 말고 ask_user(MARKET)",
+                },
+                "index": {
+                    "type": "string",
+                    "enum": ["KOSPI", "KOSDAQ", "SP500", "NASDAQ", "DOW"],
+                    "description": "질문에 지수를 직접 말했을 때만 (코스피·코스닥·S&P500·나스닥·다우). "
+                    "미지정이면 생략. 지수를 말해도 market 은 반드시 함께 지정",
+                },
+                "date": _DATE,
+            },
+            ["market"],
         ),
     ),
     ToolSpec(
         "get_market_investor_flow",
         ToolKind.DATA,
         "/internal/assistant/tools/get_market_investor_flow",
-        "투자자별(외국인·기관·연기금·개인) 기간 누적 순매수/순매도 상위 종목. "
-        "외국인·기관은 연속 순매수 일수 조건 가능. "
-        "예: '오늘 외인 뭐 샀어', '최근 5일 기관 순매도 상위', '외인이 3일 연속 산 종목'",
+        "투자자별(외국인·기관·연기금·개인) 순매수/순매도 상위 종목 순위. "
+        "코스피+코스닥 전체 (투자자별 목록 화면과 같음). "
+        "기간 누적·날짜 지정 가능, 외국인·기관은 연속 순매수 일수 조건 가능. "
+        "예: '오늘 외인 뭐 샀어', '최근 5일 기관 순매도 상위', '외인이 3일 연속 산 종목', '10월 15일 외인 순매수'",
         _obj(
             {
-                "investor": {"type": "string", "enum": ["FOREIGN", "INSTITUTION", "PENSION", "INDIVIDUAL"]},
-                "market": {"type": "string", "enum": ["KOSPI", "KOSDAQ"], "description": "미지정이면 KOSPI"},
+                "investor": {
+                    "type": "string",
+                    "enum": ["FOREIGN", "INSTITUTION", "PENSION", "INDIVIDUAL"],
+                    "description": "질문·맥락에 투자자가 없으면 추측하지 말고 ask_user(INVESTOR)",
+                },
                 "days": {
                     "type": "integer",
                     "enum": [1, 3, 5, 10, 20],
                     "description": "기간(거래일). '오늘'=1, '최근 일주일'=5",
                 },
-                "side": {"type": "string", "enum": ["BUY", "SELL"], "description": "순매수/순매도. 미지정이면 BUY"},
+                "side": {
+                    "type": "string",
+                    "enum": ["BUY", "SELL"],
+                    "description": "순매수=BUY('샀어', '매수'), 순매도=SELL('팔았어', '매도'). "
+                    "질문·맥락으로 알 수 없으면 추측하지 말고 ask_user(SIDE)",
+                },
                 "minStreakDays": {
                     "type": "integer",
                     "description": "'N일 연속' 조건(2~20일). 외국인·기관만",
                 },
+                "date": {
+                    **_DATE,
+                    "description": "YYYY-MM-DD. 날짜를 물었을 때 — 그날까지 거슬러 days 거래일 집계. "
+                    "'오늘'은 오늘 날짜, '최근'이거나 날짜가 없으면 비운다",
+                },
             },
-            ["investor"],
+            ["investor", "side"],
         ),
+        strict=False,  # 선택 인자가 많아 strict 한도(24) 때문에 해제, 값 검증은 Kotlin
     ),
     ToolSpec(
         "get_stock_quote",
         ToolKind.DATA,
         "/internal/assistant/tools/get_stock_quote",
         "종목 시세: 현재가·등락·거래량·당일 고저·52주 고저. 국내·미국·코인. 종목 2~3개면 비교. "
-        "예: '삼성전자 얼마야', 'TLT 현재가', '비트코인 시세', '삼성전자랑 하이닉스 비교'",
-        _obj({"stockQuery": _STOCK_QUERIES, "market": _MARKET_HINT}, ["stockQuery"]),
+        "날짜를 주면 그날 종가·고저·거래량. "
+        "예: '삼성전자 얼마야', 'TLT 현재가', '비트코인 시세', '삼성전자랑 하이닉스 비교', '10월 15일 삼성전자 종가'",
+        _obj({"stockQuery": _STOCK_QUERIES, "market": _MARKET_HINT, "date": _DATE}, ["stockQuery"]),
     ),
     ToolSpec(
         "get_stock_investor_flow",
         ToolKind.DATA,
         "/internal/assistant/tools/get_stock_investor_flow",
         "국내 종목의 일자별 외국인/기관/개인 순매수(금액)와 연속 순매수 일수. "
-        "예: '삼성전자 외인 수급', '하이닉스 기관 며칠 연속 샀어'",
+        "예: '삼성전자 외인 수급', '하이닉스 기관 며칠 연속 샀어', '10월 15일 삼성전자 수급'",
         _obj(
             {
                 "stockQuery": _STOCK_QUERIES,
-                "days": {"type": "integer", "description": "최근 며칠(1~10). 미지정 5"},
+                "days": {
+                    "type": "integer",
+                    "description": "최근 며칠(1~10). 미지정 5. date 가 있으면 그날까지 거슬러 며칠",
+                },
+                "date": _DATE,
             },
             ["stockQuery"],
         ),
@@ -137,7 +203,25 @@ _SPECS: list[ToolSpec] = [
         "get_global_indexes",
         ToolKind.DATA,
         "/internal/assistant/tools/get_global_indexes",
-        "미국 지수(나스닥·S&P500·다우·필라델피아 반도체)·미국 국채 2/5/10/30년·환율 스냅샷. 예: '미국장 어때', '환율', '금리'",
+        "미국 지수(나스닥·S&P500·다우·필라델피아 반도체)·미국 국채 2/5/10/30년·환율 당일 스냅샷. "
+        "예: '미국장 어때', '환율'. 과거 날짜 조회 불가 — 국채만 날짜를 물으면 get_treasury_yields",
+    ),
+    ToolSpec(
+        "get_treasury_yields",
+        ToolKind.DATA,
+        "/internal/assistant/tools/get_treasury_yields",
+        "국채 금리: 한국 2/3/5/10/20/30년, 미국 2/5/10/30년. 날짜를 주면 그날 종가. "
+        "예: '국채 금리', '한국 국채 10년', '미국 국채 금리', '10월 15일 미국 국채'",
+        _obj(
+            {
+                "market": {
+                    "type": "string",
+                    "enum": ["KR", "US"],
+                    "description": "한국 국채=KR, 미국 국채=US. '국채 금리'처럼 특정하지 않으면 비운다(둘 다)",
+                },
+                "date": _DATE,
+            }
+        ),
     ),
     ToolSpec(
         "get_calendar",
@@ -168,14 +252,16 @@ _SPECS: list[ToolSpec] = [
         ToolKind.DATA,
         "/internal/assistant/tools/get_recommend_list",
         "오늘의 시스템 분류(추천) 종목 목록 — 등급별 종목명. "
-        "예: '오늘 추천 뭐야', 'BUY 종목', '삼성전자 등급'(목록에 있으면)",
+        "날짜를 주면 그날 산출한 추천 기록. "
+        "예: '오늘 추천 뭐야', 'BUY 종목', '삼성전자 등급'(목록에 있으면), '10월 15일 추천'",
         _obj(
             {
                 "grade": {
                     "type": "string",
                     "enum": ["STRONG_BUY", "BUY", "HOLD", "SELL", "STRONG_SELL"],
                     "description": "미지정이면 전체",
-                }
+                },
+                "date": _DATE,
             }
         ),
     ),
@@ -202,6 +288,7 @@ _SPECS: list[ToolSpec] = [
                 "totalRateGt": {"type": "number", "description": "총 수익률이 이 값 초과인 종목만"},
             }
         ),
+        strict=False,  # 선택 인자 5개 — strict 한도(24) 때문에 해제, 값 검증은 Kotlin
     ),
     ToolSpec(
         "show_my_holding",
@@ -260,6 +347,15 @@ def requires_personal(name: str) -> bool:
     """개인 도구(표시·실행)인가 — 2차 인증 토큰이 있어야 실행한다. Kotlin ServiceTokenFilter 도 같은 기준으로 막는다"""
     spec = REGISTRY.get(name)
     return spec is not None and spec.kind != ToolKind.DATA
+
+
+def _check_strict_budget() -> None:
+    total = sum(t.optional_count() for t in _SPECS if t.strict)
+    if total > STRICT_OPTIONAL_LIMIT:
+        raise RuntimeError(f"strict 선택 인자 {total}개 > 한도 {STRICT_OPTIONAL_LIMIT}: 일부 도구를 strict=False 로")
+
+
+_check_strict_budget()
 
 
 def anthropic_tools() -> list[dict[str, Any]]:

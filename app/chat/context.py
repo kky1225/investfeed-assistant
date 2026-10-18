@@ -45,6 +45,7 @@ class TurnContext:
     usage: Usage = field(default_factory=Usage)
     compacted: bool = False
     picked_name: str | None = None
+    date_notice: str | None = None  # 앞 질문 날짜를 이어받아 조회할 때의 안내 ("앞 질문과 같은 10/15(목) 기준입니다.")
     carried: list[PendingItem] = field(default_factory=list)  # 종목 선택 후에도 남은, 아직 묻지 않은 후보
 
     def emit(self, event: str, data: dict[str, Any]) -> None:
