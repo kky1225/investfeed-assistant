@@ -20,6 +20,7 @@ class Missing(StrEnum):
     MARKET = "MARKET"  # 국내/미국 (서킷브레이커처럼 시장마다 답이 다른 질문)
     INVESTOR = "INVESTOR"  # 외국인/기관 등 (투자자별 순위)
     SIDE = "SIDE"  # 순매수/순매도 (투자자별 순위)
+    RANK_TYPE = "RANK_TYPE"  # 거래대금/거래량/거래량 급증률 (거래 순위)
 
 
 REJECT_TEXT: dict[str, str] = {
@@ -41,6 +42,7 @@ ASK_TEXT: dict[str, str] = {
     Missing.MARKET: "국내와 미국 중 어느 시장인가요?",
     Missing.INVESTOR: "외국인과 기관 중 어느 쪽인가요? (연기금·개인도 볼 수 있어요)",
     Missing.SIDE: "순매수와 순매도 중 어느 쪽인가요?",
+    Missing.RANK_TYPE: "거래대금, 거래량, 거래량 급증률 중 어떤 순위인가요?",
 }
 
 CHOOSE_STOCK = "어떤 종목인가요? 아래에서 골라 주세요."

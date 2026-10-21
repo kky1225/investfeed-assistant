@@ -1,4 +1,4 @@
-"""도구 레지스트리 (명세 3.2, 4단계 확정본 — 데이터 11 · 표시 4 · 실행 1).
+"""도구 레지스트리 (명세 3.2, 4단계 확정본 — 데이터 11 · 표시 4 · 실행 1. 이후 추가: get_trading_rank 2026-10-19).
 
 5단계 해석 노드가 이 목록을 그대로 모델에 넘긴다(Anthropic tool 형식, strict). 인자 검증은 스키마(required·enum)가 맡고,
 값 검증·종목명 확정은 Kotlin 이 한다. 데이터 도구는 공개 데이터 JSON, 표시 도구는 카드 참조 ID 만 돌려준다 (C-01).
@@ -77,12 +77,13 @@ _ASSET_CLASS = {
     "description": "국내주식/미국주식/코인. 미지정이면 전체",
 }
 
-# 날짜 지정 조회 공통 인자. 미지정이면 서버가 오늘(장 전·휴장일이면 직전 거래일)로 답한다
+# 날짜 지정 조회 공통 인자. 미지정이면 서버가 오늘(장 전·휴장일이면 직전 거래일)로 답한다.
+# 오늘·어제는 날짜를 계산하지 않고 의미값으로 넘긴다 — 시장별 실제 날짜는 Kotlin AssistantDate 가 정한다 (2026-10-20).
+# union(anyOf·enum) 은 strict 한도에 걸려 문자열 하나로 받고 값 검증은 Kotlin
 _DATE = {
     "type": "string",
-    "format": "date",
-    "description": "YYYY-MM-DD. 질문에 날짜('오늘', '어제', '10월 15일')가 있을 때 — '오늘'도 오늘 날짜를 넣는다. "
-    "'지금'·'현재'이거나 날짜가 없으면 비운다. 미국 시장은 '오늘'이면 비우고 직접 말한 날짜만(현지 날짜)",
+    "description": "질문에 날짜가 있을 때만. '오늘' → TODAY, '어제' → YESTERDAY, "
+    "그 밖의 날짜('10월 15일', '그제', '지난주 금요일')는 YYYY-MM-DD. '지금'·'현재'·'최근'이거나 날짜가 없으면 비운다",
 }
 
 _SPECS: list[ToolSpec] = [
@@ -164,13 +165,38 @@ _SPECS: list[ToolSpec] = [
                 },
                 "date": {
                     **_DATE,
-                    "description": "YYYY-MM-DD. 날짜를 물었을 때 — 그날까지 거슬러 days 거래일 집계. "
-                    "'오늘'은 오늘 날짜, '최근'이거나 날짜가 없으면 비운다",
+                    "description": _DATE["description"] + ". 그날까지 거슬러 days 거래일 집계",
                 },
             },
             ["investor", "side"],
         ),
         strict=False,  # 선택 인자가 많아 strict 한도(24) 때문에 해제, 값 검증은 Kotlin
+    ),
+    ToolSpec(
+        "get_trading_rank",
+        ToolKind.DATA,
+        "/internal/assistant/tools/get_trading_rank",
+        "거래대금·거래량·거래량 급증률 상위 종목 순위 (순위 화면과 같음). 국내(코스피+코스닥) 또는 미국. "
+        "당일 순위만 있고 지난 날짜는 서버가 안내한다. "
+        "예: '거래대금 상위', '오늘 거래량 많은 종목', '미국 거래량 급증', '거래 많이 터진 종목'",
+        _obj(
+            {
+                "market": {
+                    "type": "string",
+                    "enum": ["KR", "US"],
+                    "description": "국내=KR, 미국=US. 질문·대화 맥락에 시장이 없으면 추측하지 말고 ask_user(MARKET)",
+                },
+                "type": {
+                    "type": "string",
+                    "enum": ["VALUE", "VOLUME", "SURGE"],
+                    "description": "거래대금=VALUE, 거래량=VOLUME, 거래량 급증(률)=SURGE. "
+                    "'거래 많은'처럼 대금·거래량을 가리지 않으면 VALUE. "
+                    "'순위 보여줘'처럼 종류가 없으면 ask_user(RANK_TYPE)",
+                },
+                "date": _DATE,
+            },
+            ["market", "type"],
+        ),
     ),
     ToolSpec(
         "get_stock_quote",
