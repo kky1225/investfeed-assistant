@@ -31,6 +31,8 @@ SYSTEM_PROMPT = """\
   국내(코스피·코스닥)인지 미국(나스닥·S&P500·다우)인지 질문·맥락에 없으면 추측하지 말고 ask_user(MARKET)로 되묻습니다.
 - 거래대금·거래량·거래량 급증 상위 순위는 get_trading_rank 를 씁니다 (투자자별 순매수 순위는 get_market_investor_flow).
   국내인지 미국인지 질문·맥락에 없으면 ask_user(MARKET), 순위 종류가 없으면 ask_user(RANK_TYPE)로 되묻습니다.
+- 업종(섹터)의 등락이나 업종 안의 종목을 물으면 get_sector_performance 를 씁니다 ("반도체 업종 어때", "많이 오른 업종").
+  업종 이름의 뉴스를 물으면 search_news 입니다. 국내인지 미국인지 질문·맥락에 없으면 ask_user(MARKET)로 되묻습니다.
 - 휴장일은 get_calendar(type=HOLIDAY), 금리 결정(FOMC·금통위)은 type=MEETING, 지표 발표는 type=INDICATOR.
   "이번 주"는 월요일~일요일, "이번 달"은 1일~말일입니다. 오늘 날짜는 질문과 함께 주어집니다.
 
@@ -56,6 +58,9 @@ reject 로 처리할 질문 (도구를 부르지 말고 reject 하나만):
 - PAPER_TRADE: 모의투자·자동매매 관련 ("모의투자 수익률", "오늘 자동매매 뭐 샀어").
 - GREETING: 인사만 있는 경우.
 - DATE_UNSUPPORTED: 특정 날짜를 물었는데 그 날짜로 조회할 수 있는 도구가 없는 경우.
+- UNSUPPORTED: 투자 데이터 질문이지만 그 데이터를 주는 도구가 없는 경우. 비슷한 도구로 대신 답하지 않습니다.
+  예: 종목이 어느 업종에 속하는지("LG에너지솔루션은 무슨 업종이야"), 재무·가치 지표(PER·PBR·배당률·실적),
+  업종 안 종목 비중, 공시·목표주가. 질문한 데이터 자체를 도구가 주면 해당 도구를 씁니다.
 - OUT_OF_SCOPE: 투자 데이터와 무관한 질문, 잡담, 용어 설명·뉴스 요약·문서 요약 요청.
 
 ask_user 로 처리할 질문:
@@ -73,7 +78,7 @@ _FAKE_TOOLS: list[dict[str, Any]] = [
         "name": REJECT_TOOL,
         "description": (
             "조회할 데이터가 없는 질문. 매매·판단·예측(ACTION), 모의투자(PAPER_TRADE), "
-            "인사(GREETING), 그 밖(OUT_OF_SCOPE)"
+            "인사(GREETING), 날짜 미지원(DATE_UNSUPPORTED), 도구가 없는 투자 데이터(UNSUPPORTED), 그 밖(OUT_OF_SCOPE)"
         ),
         "input_schema": {
             "type": "object",
@@ -98,5 +103,5 @@ _FAKE_TOOLS: list[dict[str, Any]] = [
 
 
 def interpret_tools() -> list[dict[str, Any]]:
-    """모델에 넘길 도구 = 실제 도구 16개 + 가짜 도구 2개. 순서 고정(캐시)"""
+    """모델에 넘길 도구 = 실제 도구 17개 + 가짜 도구 2개. 순서 고정(캐시)"""
     return anthropic_tools() + _FAKE_TOOLS

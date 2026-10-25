@@ -1,4 +1,5 @@
-"""도구 레지스트리 (명세 3.2, 4단계 확정본 — 데이터 11 · 표시 4 · 실행 1. 이후 추가: get_trading_rank 2026-10-19).
+"""도구 레지스트리 (명세 3.2, 4단계 확정본 — 데이터 11 · 표시 4 · 실행 1.
+이후 추가: get_trading_rank 2026-10-19, get_sector_performance 2026-10-24).
 
 5단계 해석 노드가 이 목록을 그대로 모델에 넘긴다(Anthropic tool 형식, strict). 인자 검증은 스키마(required·enum)가 맡고,
 값 검증·종목명 확정은 Kotlin 이 한다. 데이터 도구는 공개 데이터 JSON, 표시 도구는 카드 참조 ID 만 돌려준다 (C-01).
@@ -196,6 +197,44 @@ _SPECS: list[ToolSpec] = [
                 "date": _DATE,
             },
             ["market", "type"],
+        ),
+    ),
+    ToolSpec(
+        "get_sector_performance",
+        ToolKind.DATA,
+        "/internal/assistant/tools/get_sector_performance",
+        "업종별 당일 등락률 (업종 화면 히트맵과 같음). 국내는 코스피·코스닥 산업 업종, 미국은 업종 41개. "
+        "업종을 주면 그 업종의 소속 종목. 당일 값만 있고 지난 날짜·기간 수익률은 서버가 안내한다. "
+        "종목이 어느 업종인지 묻는 질문에는 쓰지 않는다(reject UNSUPPORTED). "
+        "예: '오늘 업종 어때', '코스닥 업종', '많이 내린 업종', '거래대금 몰린 업종', '반도체 업종 어때', "
+        "'코스닥 화학 업종', '미국 업종 한 달 수익률'",
+        _obj(
+            {
+                "market": {
+                    "type": "string",
+                    "enum": ["KR", "KOSPI", "KOSDAQ", "US"],
+                    "description": "코스피만=KOSPI, 코스닥만=KOSDAQ, '국내'처럼 둘을 가리지 않으면 KR(둘 다), 미국=US. "
+                    "국내인지 미국인지 질문·대화 맥락에 없으면 추측하지 말고 ask_user(MARKET)",
+                },
+                "sector": {
+                    "type": "string",
+                    "description": "업종을 말했을 때만. 사용자가 쓴 그대로 (반도체, 전기전자, 은행, 화학). "
+                    "업종 확정은 서버가 한다",
+                },
+                "multiDay": {
+                    "type": "boolean",
+                    "description": "'일주일', '한 달', '올해'처럼 여러 날에 걸친 수익률을 물으면 true. "
+                    "그 밖에는 비운다",
+                },
+                "sort": {
+                    "type": "string",
+                    "enum": ["RISE", "FALL", "VALUE"],
+                    "description": "정렬: 많이 내린·약한·하락=FALL, 거래대금·거래 많은·돈 몰린=VALUE. "
+                    "많이 오른·강한·순위만 물으면 비운다(등락률 높은 순)",
+                },
+                "date": _DATE,
+            },
+            ["market"],
         ),
     ),
     ToolSpec(

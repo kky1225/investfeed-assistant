@@ -9,6 +9,7 @@ class RejectReason(StrEnum):
     PAPER_TRADE = "PAPER_TRADE"  # 모의투자·자동매매 (관리자 전용, C-12)
     GREETING = "GREETING"  # 인사
     DATE_UNSUPPORTED = "DATE_UNSUPPORTED"  # 날짜 지정 조회를 아직 지원하지 않는 데이터
+    UNSUPPORTED = "UNSUPPORTED"  # 투자 데이터 질문이지만 알맞은 도구가 없는 조회 (종목 업종 소속·재무 지표 등)
 
 
 class Missing(StrEnum):
@@ -31,6 +32,7 @@ REJECT_TEXT: dict[str, str] = {
     RejectReason.DATE_UNSUPPORTED: (
         "해당 데이터는 과거 날짜 조회를 지원하지 않습니다. 당일(최근) 데이터만 제공할 수 있습니다."
     ),
+    RejectReason.UNSUPPORTED: "아직 지원하지 않는 조회입니다. 시세·수급·업종·일정 같은 정보를 물어보세요.",
 }
 
 ASK_TEXT: dict[str, str] = {
