@@ -10,6 +10,7 @@ class RejectReason(StrEnum):
     GREETING = "GREETING"  # 인사
     DATE_UNSUPPORTED = "DATE_UNSUPPORTED"  # 날짜 지정 조회를 아직 지원하지 않는 데이터
     UNSUPPORTED = "UNSUPPORTED"  # 투자 데이터 질문이지만 알맞은 도구가 없는 조회 (종목 업종 소속·재무 지표 등)
+    FX_PERIOD = "FX_PERIOD"  # 환율을 여러 날(기간·추이)로 물음 — 환율은 하루 단위만 (2026-10-26)
 
 
 class Missing(StrEnum):
@@ -22,6 +23,7 @@ class Missing(StrEnum):
     INVESTOR = "INVESTOR"  # 외국인/기관 등 (투자자별 순위)
     SIDE = "SIDE"  # 순매수/순매도 (투자자별 순위)
     RANK_TYPE = "RANK_TYPE"  # 거래대금/거래량/거래량 급증률 (거래 순위)
+    RANK_MARKET = "RANK_MARKET"  # 국내/미국/코인 (거래 순위만 코인이 있다)
 
 
 REJECT_TEXT: dict[str, str] = {
@@ -33,6 +35,9 @@ REJECT_TEXT: dict[str, str] = {
         "해당 데이터는 과거 날짜 조회를 지원하지 않습니다. 당일(최근) 데이터만 제공할 수 있습니다."
     ),
     RejectReason.UNSUPPORTED: "아직 지원하지 않는 조회입니다. 시세·수급·업종·일정 같은 정보를 물어보세요.",
+    RejectReason.FX_PERIOD: (
+        "환율은 하루 단위로만 조회할 수 있습니다. 날짜를 하나로 물어봐 주세요. (예: 어제 환율, 10월 23일 환율)"
+    ),
 }
 
 ASK_TEXT: dict[str, str] = {
@@ -45,6 +50,7 @@ ASK_TEXT: dict[str, str] = {
     Missing.INVESTOR: "외국인과 기관 중 어느 쪽인가요? (연기금·개인도 볼 수 있어요)",
     Missing.SIDE: "순매수와 순매도 중 어느 쪽인가요?",
     Missing.RANK_TYPE: "거래대금, 거래량, 거래량 급증률 중 어떤 순위인가요?",
+    Missing.RANK_MARKET: "국내, 미국, 코인 중 어느 시장인가요?",
 }
 
 CHOOSE_STOCK = "어떤 종목인가요? 아래에서 골라 주세요."

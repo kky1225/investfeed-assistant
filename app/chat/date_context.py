@@ -28,7 +28,7 @@ YESTERDAY = "YESTERDAY"
 DATED_TOOLS = {
     "get_market_summary", "get_circuit_breakers", "get_stock_quote", "get_stock_investor_flow",
     "get_market_investor_flow", "get_recommend_list", "get_treasury_yields", "get_trading_rank",
-    "get_sector_performance",
+    "get_sector_performance", "get_exchange_rates",
 }
 
 _WEEKDAYS = "월화수목금토일"

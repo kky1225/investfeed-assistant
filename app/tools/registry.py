@@ -1,5 +1,5 @@
 """도구 레지스트리 (명세 3.2, 4단계 확정본 — 데이터 11 · 표시 4 · 실행 1.
-이후 추가: get_trading_rank 2026-10-19, get_sector_performance 2026-10-24).
+이후 추가: get_trading_rank 2026-10-19, get_sector_performance 2026-10-24, get_exchange_rates 2026-10-26).
 
 5단계 해석 노드가 이 목록을 그대로 모델에 넘긴다(Anthropic tool 형식, strict). 인자 검증은 스키마(required·enum)가 맡고,
 값 검증·종목명 확정은 Kotlin 이 한다. 데이터 도구는 공개 데이터 JSON, 표시 도구는 카드 참조 ID 만 돌려준다 (C-01).
@@ -177,22 +177,25 @@ _SPECS: list[ToolSpec] = [
         "get_trading_rank",
         ToolKind.DATA,
         "/internal/assistant/tools/get_trading_rank",
-        "거래대금·거래량·거래량 급증률 상위 종목 순위 (순위 화면과 같음). 국내(코스피+코스닥) 또는 미국. "
-        "당일 순위만 있고 지난 날짜는 서버가 안내한다. "
-        "예: '거래대금 상위', '오늘 거래량 많은 종목', '미국 거래량 급증', '거래 많이 터진 종목'",
+        "거래대금·거래량·거래량 급증률 상위 종목 순위 (순위 화면과 같음). 국내(코스피+코스닥)·미국·코인. "
+        "코인은 업비트 24시간 거래대금 순위만 있다. 당일 순위만 있고 지난 날짜는 서버가 안내한다. "
+        "예: '거래대금 상위', '오늘 거래량 많은 종목', '미국 거래량 급증', '거래 많이 터진 종목', '코인 순위', "
+        "'코인 거래대금 순위'",
         _obj(
             {
                 "market": {
                     "type": "string",
-                    "enum": ["KR", "US"],
-                    "description": "국내=KR, 미국=US. 질문·대화 맥락에 시장이 없으면 추측하지 말고 ask_user(MARKET)",
+                    "enum": ["KR", "US", "CRYPTO"],
+                    "description": "국내=KR, 미국=US, 코인=CRYPTO. "
+                    "질문·대화 맥락에 시장이 없으면 추측하지 말고 ask_user(RANK_MARKET)",
                 },
                 "type": {
                     "type": "string",
                     "enum": ["VALUE", "VOLUME", "SURGE"],
                     "description": "거래대금=VALUE, 거래량=VOLUME, 거래량 급증(률)=SURGE. "
                     "'거래 많은'처럼 대금·거래량을 가리지 않으면 VALUE. "
-                    "'순위 보여줘'처럼 종류가 없으면 ask_user(RANK_TYPE)",
+                    "'순위 보여줘'처럼 종류가 없으면 ask_user(RANK_TYPE). "
+                    "코인은 종류가 없으면 묻지 않고 VALUE, 거래량·급증률을 물으면 그대로 넣는다(서버가 안내)",
                 },
                 "date": _DATE,
             },
@@ -268,8 +271,17 @@ _SPECS: list[ToolSpec] = [
         "get_global_indexes",
         ToolKind.DATA,
         "/internal/assistant/tools/get_global_indexes",
-        "미국 지수(나스닥·S&P500·다우·필라델피아 반도체)·미국 국채 2/5/10/30년·환율 당일 스냅샷. "
-        "예: '미국장 어때', '환율'. 과거 날짜 조회 불가 — 국채만 날짜를 물으면 get_treasury_yields",
+        "미국 시장 전체 당일 스냅샷: 미국 지수(나스닥·S&P500·다우·필라델피아 반도체)·미국 국채 2/5/10/30년. "
+        "예: '미국장 어때', '미국 증시 마감'. 과거 날짜 조회 불가 — 국채만 물으면 get_treasury_yields, "
+        "환율만 물으면 get_exchange_rates",
+    ),
+    ToolSpec(
+        "get_exchange_rates",
+        ToolKind.DATA,
+        "/internal/assistant/tools/get_exchange_rates",
+        "환율: 원/달러와 달러인덱스의 값·등락. 날짜를 주면 그날 원/달러 최종 고시(최근 1년, 달러인덱스 제외). "
+        "예: '환율', '달러 얼마야', '원달러 환율', '달러인덱스', '어제 환율', '10월 15일 원달러'",
+        _obj({"date": _DATE}),
     ),
     ToolSpec(
         "get_treasury_yields",
