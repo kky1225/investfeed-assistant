@@ -17,9 +17,11 @@ from app.chat.context import TurnContext
 from app.chat.date_context import apply_date_context
 from app.chat.execute import apply_stock_choice, run_tools_and_send_cards
 from app.chat.interpret import interpret as llm_interpret
-from app.chat.session import AuthPending, ToolCall, compact
+from app.chat.session import AuthPending, ToolCall, Turn, compact
 from app.graph.state import ChatState
 from app.tools.registry import requires_personal
+
+WATCHLIST_TOOL = "get_my_watchlist"
 
 
 def _ctx() -> TurnContext:
@@ -78,6 +80,15 @@ async def guard(state: ChatState) -> ChatState:
         ctx.picked_name = pick.get("name")
         ctx.route = "PICK"
         return {"route": "PICK", "calls": [{"name": c.name, "args": c.args} for c in calls]}
+
+    # 관심종목 그룹 목록 카드의 버튼: 대기 중 호출 없이 고른 그룹을 바로 조회한다 (LLM 없음, 그룹 소유 확인은 Kotlin).
+    if group := state.get("group"):
+        call = ToolCall(WATCHLIST_TOOL, {"kind": group["kind"], "groupId": group["groupId"]})
+        # 이력에는 그룹 이름으로 남겨 다음 질문이 이어받게 한다 (PICK 은 _record_history 가 남기지 않는다)
+        name = group.get("name") or ctx.question
+        ctx.session.turns.append(Turn(ctx.question, [ToolCall(WATCHLIST_TOOL, {"kind": group["kind"], "group": name})]))
+        ctx.route = "PICK"
+        return {"route": "PICK", "calls": [{"name": call.name, "args": call.args}]}
 
     if blocked := await ctx.deps.guard.check(ctx.member_id):
         ctx.route, ctx.reason = "BLOCKED", blocked

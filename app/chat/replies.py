@@ -24,6 +24,8 @@ class Missing(StrEnum):
     SIDE = "SIDE"  # 순매수/순매도 (투자자별 순위)
     RANK_TYPE = "RANK_TYPE"  # 거래대금/거래량/거래량 급증률 (거래 순위)
     RANK_MARKET = "RANK_MARKET"  # 국내/미국/코인 (거래 순위만 코인이 있다)
+    GOAL_TYPE = "GOAL_TYPE"  # 총 자산/월간·연간 실현손익 (투자 목표 변경)
+    GOAL_AMOUNT = "GOAL_AMOUNT"  # 새 목표 금액 (투자 목표 변경)
 
 
 REJECT_TEXT: dict[str, str] = {
@@ -34,7 +36,7 @@ REJECT_TEXT: dict[str, str] = {
     RejectReason.DATE_UNSUPPORTED: (
         "해당 데이터는 과거 날짜 조회를 지원하지 않습니다. 당일(최근) 데이터만 제공할 수 있습니다."
     ),
-    RejectReason.UNSUPPORTED: "아직 지원하지 않는 조회입니다. 시세·수급·업종·일정 같은 정보를 물어보세요.",
+    RejectReason.UNSUPPORTED: "아직 지원하지 않는 기능입니다. 시세·수급·업종·일정 같은 정보를 물어보세요.",
     RejectReason.FX_PERIOD: (
         "환율은 하루 단위로만 조회할 수 있습니다. 날짜를 하나로 물어봐 주세요. (예: 어제 환율, 10월 23일 환율)"
     ),
@@ -51,10 +53,15 @@ ASK_TEXT: dict[str, str] = {
     Missing.SIDE: "순매수와 순매도 중 어느 쪽인가요?",
     Missing.RANK_TYPE: "거래대금, 거래량, 거래량 급증률 중 어떤 순위인가요?",
     Missing.RANK_MARKET: "국내, 미국, 코인 중 어느 시장인가요?",
+    Missing.GOAL_TYPE: "총 자산, 월간 실현손익, 연간 실현손익 중 어떤 목표인가요?",
+    Missing.GOAL_AMOUNT: "목표 금액을 얼마로 할까요?",
 }
 
 CHOOSE_STOCK = "어떤 종목인가요? 아래에서 골라 주세요."
+CONFIRM_STOCK = "정확히 일치하는 종목이 없습니다. 아래 종목이 맞나요?"
 CONFIRM_ALERT = "아래 내용으로 알림을 등록할까요?"
+CONFIRM_ALERT_DELETE = "아래 알림을 삭제할까요?"
+CONFIRM_GOAL = "아래 내용으로 투자 목표를 변경할까요?"
 ALL_FAILED = "조회하지 못했습니다. 카드의 오류 내용을 확인해 주세요."
 PICK_EXPIRED = "선택할 항목이 만료되었습니다. 다시 질문해 주세요."
 AUTH_REQUIRED = "2차 비밀번호 인증이 필요한 질문입니다."

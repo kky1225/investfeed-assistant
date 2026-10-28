@@ -14,7 +14,7 @@ from typing import Any
 class ToolKind(StrEnum):
     DATA = "DATA"  # 공개 데이터, 결과 전체 반환
     DISPLAY = "DISPLAY"  # 개인 데이터, 카드 참조만
-    ACTION = "ACTION"  # 설정 변경, 확인 카드 → 실행 (실행은 프론트가 호출)
+    ACTION = "ACTION"  # 설정 변경, 확인 카드 → 실행 (실행은 프론트가 호출). 2차 인증 없음 — 웹 알림 설정과 같다
 
 
 @dataclass(frozen=True)
@@ -29,6 +29,8 @@ class ToolSpec:
     # strict 는 요청 전체에서 선택 인자 합계가 STRICT_OPTIONAL_LIMIT 이하여야 한다 (넘으면 API 400).
     # 선택 인자가 많고 값 검증을 Kotlin 이 하는 도구만 False 로 둔다
     strict: bool = True
+    # 실행 도구 중 웹에서도 2차 인증 메뉴인 것 (투자 목표 변경). 표시 도구는 항상 2차 인증
+    secondary_auth: bool = False
 
     def to_anthropic(self) -> dict[str, Any]:
         """수치·길이·배열 제약은 strict 가 지원하지 않는다. 범위 검사는 Kotlin 이 한다 (DataToolService 상수)"""
@@ -349,6 +351,26 @@ _SPECS: list[ToolSpec] = [
         "뉴스 검색 (제목·날짜·링크, 최대 5건). 예: '삼성전자 뉴스', '반도체 뉴스 있어'",
         _obj({"query": {"type": "string"}, "n": {"type": "integer", "description": "개수(1~5). 미지정 5"}}, ["query"]),
     ),
+    # 관심종목은 웹에서도 로그인만 필요한 메뉴라 2차 인증 없는 데이터 도구 (2026-10-27).
+    # 결과는 다른 데이터 도구처럼 화면 카드로만 가고 LLM 에는 돌려주지 않는다
+    ToolSpec(
+        "get_my_watchlist",
+        ToolKind.DATA,
+        "/internal/assistant/tools/get_my_watchlist",
+        "내 관심종목 카드. 그룹이 여럿이면 그룹 목록을 보여 주고 사용자가 고른다. "
+        "예: '관심종목 보여줘', '코인 관심종목', '관심종목 반도체 그룹'",
+        _obj(
+            {
+                "kind": {
+                    "type": "string",
+                    "enum": ["STOCK", "CRYPTO"],
+                    "description": "주식(국내·미국)/코인. 미지정이면 둘 다",
+                },
+                "group": {"type": "string", "description": "질문에 그룹 이름이 있을 때만 (예: 반도체)"},
+            }
+        ),
+        strict=False,  # 선택 인자 2개 — strict 한도(24) 때문에 해제, 그룹 이름 대조는 Kotlin
+    ),
     # ── 표시 도구 (개인 데이터 → 카드 참조) ──
     ToolSpec(
         "show_my_portfolio",
@@ -388,6 +410,13 @@ _SPECS: list[ToolSpec] = [
         ),
     ),
     ToolSpec(
+        "show_my_goals",
+        ToolKind.DISPLAY,
+        "/internal/assistant/tools/show_my_goals",
+        "투자 목표 카드 (총 자산·월간 실현손익·연간 실현손익 목표의 목표 금액·현재 금액·달성률). "
+        "예: '내 투자 목표', '목표 달성률 어때', '이달 목표 얼마나 남았어'",
+    ),
+    ToolSpec(
         "show_briefing",
         ToolKind.DISPLAY,
         "/internal/assistant/tools/show_briefing",
@@ -405,15 +434,53 @@ _SPECS: list[ToolSpec] = [
         "create_price_alert",
         ToolKind.ACTION,
         "/internal/assistant/tools/create_price_alert/preview",
-        "목표가 알림 등록 확인 카드. 국내 주식·코인. 예: '삼성전자 7만원 되면 알려줘', '비트코인 1억 밑으로 가면 알림'",
+        "목표가 알림 등록 확인 카드. 국내·미국 주식·코인 (미국은 장외 시간 포함). "
+        "예: '삼성전자 7만원 되면 알려줘', '비트코인 1억 밑으로 가면 알림', '애플 250달러 넘으면 알려줘'",
         _obj(
             {
                 "stockQuery": _STOCK_QUERY,
-                "price": {"type": "integer", "description": "목표가 (원, 0보다 큼)"},
+                "price": {"type": "number", "description": "목표가 (국내·코인 원, 미국 주식 달러. 0보다 큼)"},
                 "direction": {"type": "string", "enum": ["ABOVE", "BELOW"], "description": "이상/이하 도달"},
             },
             ["stockQuery", "price", "direction"],
         ),
+    ),
+    ToolSpec(
+        "delete_price_alert",
+        ToolKind.ACTION,
+        "/internal/assistant/tools/delete_price_alert/preview",
+        "등록된 목표가 알림 삭제 확인 카드. 종목은 내가 등록한 알림 안에서 찾는다. "
+        "예: '삼성전자 7만원 알림 삭제해줘', '애플 목표가 알림 지워줘', '비트코인 알림 취소'",
+        _obj(
+            {
+                "stockQuery": _STOCK_QUERY,
+                "price": {
+                    "type": "number",
+                    "description": "삭제할 목표가. 질문에 금액이 있을 때만 (국내·코인 원, 미국 주식 달러)",
+                },
+            },
+            ["stockQuery"],
+        ),
+        strict=False,  # 선택 인자 1개 — strict 한도(24) 때문에 해제, 값 검증은 Kotlin (2026-10-28)
+    ),
+    ToolSpec(
+        "update_my_goal",
+        ToolKind.ACTION,
+        "/internal/assistant/tools/update_my_goal/preview",
+        "투자 목표 금액 변경 확인 카드 (목표가 없으면 새로 설정). "
+        "예: '월간 실현손익 목표 500만원으로 바꿔줘', '연간 목표 1억으로', '총 자산 목표 5억으로 올려줘'",
+        _obj(
+            {
+                "type": {
+                    "type": "string",
+                    "enum": ["TOTAL_ASSET", "MONTHLY_REALIZED_PNL", "YEARLY_REALIZED_PNL"],
+                    "description": "총 자산 / 월간 실현손익 / 연간 실현손익 목표",
+                },
+                "targetAmount": {"type": "integer", "description": "새 목표 금액 (원, 0보다 큼. '500만원' → 5000000)"},
+            },
+            ["type", "targetAmount"],
+        ),
+        secondary_auth=True,  # 웹 투자 목표(/api/goals)가 2차 인증 메뉴 (2026-10-27)
     ),
 ]
 
@@ -421,9 +488,13 @@ REGISTRY: dict[str, ToolSpec] = {t.name: t for t in _SPECS}
 
 
 def requires_personal(name: str) -> bool:
-    """개인 도구(표시·실행)인가 — 2차 인증 토큰이 있어야 실행한다. Kotlin ServiceTokenFilter 도 같은 기준으로 막는다"""
+    """2차 인증 토큰이 있어야 실행하는 도구인가 — 표시 도구 전부 + secondary_auth 실행 도구(투자 목표 변경).
+    Kotlin ServiceTokenFilter 도 같은 기준으로 막는다.
+
+    목표가 알림은 웹 알림 설정이 2차 인증 대상이 아니라 제외한다 (2026-10-27). 기준은 웹 SecondaryAuthFilter 경로
+    """
     spec = REGISTRY.get(name)
-    return spec is not None and spec.kind != ToolKind.DATA
+    return spec is not None and (spec.kind == ToolKind.DISPLAY or spec.secondary_auth)
 
 
 def _check_strict_budget() -> None:

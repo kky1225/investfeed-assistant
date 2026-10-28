@@ -62,9 +62,18 @@ class PickReq(BaseModel):
     name: str | None = Field(default=None, max_length=100)
 
 
+class GroupPickReq(BaseModel):
+    """관심종목 그룹 선택 — LLM 재호출 없이 고른 그룹의 종목 카드를 조회 (그룹 소유 확인은 Kotlin)"""
+
+    groupId: int = Field(gt=0)
+    kind: str = Field(pattern="^(STOCK|CRYPTO)$")
+    name: str | None = Field(default=None, max_length=100)
+
+
 class ChatReq(BaseModel):
     message: str = Field(min_length=1, max_length=500)
     pick: PickReq | None = None
+    group: GroupPickReq | None = None
     resume: bool = False  # 2차 인증 후 이어서 실행 — 대기 중 도구 호출을 LLM 재호출 없이 실행
 
 
@@ -92,8 +101,9 @@ async def chat(req: ChatReq, principal: CurrentPrincipal):
         queue=queue,
     )
     pick = req.pick.model_dump() if req.pick else None
+    group = req.group.model_dump() if req.group else None
     # 처리(run_turn)는 SSE 연결과 분리된 백그라운드 작업 — 처리 쪽이 큐에 이벤트를 넣고, 아래 stream() 이 꺼내 보낸다
-    task = asyncio.create_task(run_turn(app.state.graph, deps, ctx, pick, req.resume))
+    task = asyncio.create_task(run_turn(app.state.graph, deps, ctx, pick, req.resume, group))
     app.state.tasks.add(task)
     task.add_done_callback(app.state.tasks.discard)
 

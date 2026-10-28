@@ -27,9 +27,19 @@ def _final_reply(ctx: TurnContext) -> str:
         return ctx.reply
     kinds = {c["kind"] for c in ctx.cards}
     if STOCK_CHOICE in kinds:
+        # 정확히 일치하는 종목이 없어 비슷한 종목을 제안한 경우 (Kotlin StockCandidate.similar, 2026-10-27)
+        choice = next(c for c in ctx.cards if c["kind"] == STOCK_CHOICE)
+        if all(x.get("similar") for x in choice["payload"]["candidates"]):
+            return replies.CONFIRM_STOCK
         return replies.CHOOSE_STOCK
-    if "CONFIRM_PRICE_ALERT" in kinds:
+    # 목표가 확인 카드: 지금은 도구 이름(create_price_alert)으로 오고, 실패 카드는 같은 이름에 error 만 있다
+    if any(c["kind"] == "create_price_alert" and not c.get("error") for c in ctx.cards):
         return replies.CONFIRM_ALERT
+    # 목표가 알림 삭제 확인 카드 (알림이 없으면 Kotlin 이 reply 문장으로 답해 위 ctx.reply 에서 끝난다)
+    if any(c["kind"] == "delete_price_alert" and not c.get("error") for c in ctx.cards):
+        return replies.CONFIRM_ALERT_DELETE
+    if "CONFIRM_GOAL" in kinds:  # 투자 목표 변경 확인 카드 (개인 카드 참조, Kotlin ActionToolService)
+        return replies.CONFIRM_GOAL
     if ctx.cards and all(c.get("error") for c in ctx.cards):
         return replies.ALL_FAILED
     return replies.DONE
@@ -53,7 +63,10 @@ def _record_history(ctx: TurnContext, calls: list[dict[str, Any]]) -> None:
         update_slots(ctx.session, tool_calls)
 
 
-async def run_turn(graph, deps: Deps, ctx: TurnContext, pick: dict[str, Any] | None, resume: bool = False) -> None:
+async def run_turn(
+    graph, deps: Deps, ctx: TurnContext, pick: dict[str, Any] | None, resume: bool = False,
+    group: dict[str, Any] | None = None,
+) -> None:
     started = time.monotonic()
     state: dict[str, Any] = {}
     try:
@@ -61,7 +74,10 @@ async def run_turn(graph, deps: Deps, ctx: TurnContext, pick: dict[str, Any] | N
             # ainvoke 대신 astream: 단계마다 상태를 받아 두어, 실행 중 타임아웃이 나도 interpret 까지의 상태(calls)가 남는다
             # → _record_history 가 "이 질문에 이 도구를 쓰려 했다"를 이력에 남겨 다음 질문이 이어받는다
             async for chunk in graph.astream(
-                {"member_id": ctx.member_id, "question": ctx.question, "pick": pick, "resume": resume},
+                {
+                    "member_id": ctx.member_id, "question": ctx.question,
+                    "pick": pick, "resume": resume, "group": group,
+                },
                 config={"configurable": {"ctx": ctx}},
                 stream_mode="values",
             ):
