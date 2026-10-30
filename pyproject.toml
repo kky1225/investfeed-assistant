@@ -28,8 +28,12 @@ module-root = ""
 
 [dependency-groups]
 dev = [
+    "pytest>=9.2.0",
     "ruff>=0.16.7",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 120
