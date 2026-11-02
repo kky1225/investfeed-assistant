@@ -26,6 +26,7 @@ class Missing(StrEnum):
     RANK_MARKET = "RANK_MARKET"  # 국내/미국/코인 (거래 순위만 코인이 있다)
     GOAL_TYPE = "GOAL_TYPE"  # 총 자산/월간·연간 실현손익 (투자 목표 변경)
     GOAL_AMOUNT = "GOAL_AMOUNT"  # 새 목표 금액 (투자 목표 변경)
+    REBALANCING_RATIO = "REBALANCING_RATIO"  # 바꿀 비중 항목·값 (리밸런싱 비중 변경, 2026-10-31)
 
 
 REJECT_TEXT: dict[str, str] = {
@@ -55,6 +56,7 @@ ASK_TEXT: dict[str, str] = {
     Missing.RANK_MARKET: "국내, 미국, 코인 중 어느 시장인가요?",
     Missing.GOAL_TYPE: "총 자산, 월간 실현손익, 연간 실현손익 중 어떤 목표인가요?",
     Missing.GOAL_AMOUNT: "목표 금액을 얼마로 할까요?",
+    Missing.REBALANCING_RATIO: "어떤 비중을 몇 %로 바꿀까요? (예: 주식 60% 이하, 현금 10% 이상, 종목 최대 20%)",
 }
 
 CHOOSE_STOCK = "어떤 종목인가요? 아래에서 골라 주세요."
@@ -62,6 +64,7 @@ CONFIRM_STOCK = "정확히 일치하는 종목이 없습니다. 아래 종목이
 CONFIRM_ALERT = "아래 내용으로 알림을 등록할까요?"
 CONFIRM_ALERT_DELETE = "아래 알림을 삭제할까요?"
 CONFIRM_GOAL = "아래 내용으로 투자 목표를 변경할까요?"
+CONFIRM_REBALANCING = "아래 내용으로 리밸런싱 비중을 변경할까요?"
 ALL_FAILED = "조회하지 못했습니다. 카드의 오류 내용을 확인해 주세요."
 PICK_EXPIRED = "선택할 항목이 만료되었습니다. 다시 질문해 주세요."
 AUTH_REQUIRED = "2차 비밀번호 인증이 필요한 질문입니다."

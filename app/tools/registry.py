@@ -1,5 +1,6 @@
 """도구 레지스트리 (명세 3.2, 4단계 확정본 — 데이터 11 · 표시 4 · 실행 1.
-이후 추가: get_trading_rank 2026-10-19, get_sector_performance 2026-10-24, get_exchange_rates 2026-10-26).
+이후 추가: get_trading_rank 2026-10-19, get_sector_performance 2026-10-24, get_exchange_rates 2026-10-26,
+show_my_rebalancing·update_my_rebalancing 2026-10-31).
 
 5단계 해석 노드가 이 목록을 그대로 모델에 넘긴다(Anthropic tool 형식, strict). 인자 검증은 스키마(required·enum)가 맡고,
 값 검증·종목명 확정은 Kotlin 이 한다. 데이터 도구는 공개 데이터 JSON, 표시 도구는 카드 참조 ID 만 돌려준다 (C-01).
@@ -26,11 +27,25 @@ class ToolSpec:
     input_schema: dict[str, Any] = field(
         default_factory=lambda: {"type": "object", "properties": {}, "additionalProperties": False}
     )
-    # strict 는 요청 전체에서 선택 인자 합계가 STRICT_OPTIONAL_LIMIT 이하여야 한다 (넘으면 API 400).
-    # 선택 인자가 많고 값 검증을 Kotlin 이 하는 도구만 False 로 둔다
-    strict: bool = True
+    # strict 는 규칙(아래 strict 프로퍼티)으로 정한다. 규칙과 다르게 해야 하는 도구만 이유와 함께 지정
+    strict_override: bool | None = None
     # 실행 도구 중 웹에서도 2차 인증 메뉴인 것 (투자 목표 변경). 표시 도구는 항상 2차 인증
     secondary_auth: bool = False
+
+    @property
+    def strict(self) -> bool:
+        """필수 인자가 있는 도구만 strict (2026-11-02). 필수 인자가 도구의 동작을 정하므로 형식을 보장받고,
+        인자가 없거나 선택 인자뿐인 도구는 빠져도 Kotlin 이 기본값·값 검증으로 처리한다.
+        단 숫자 enum 인자가 있으면 strict 를 쓰지 않는다 — strict 에서 그 인자가 빠지고 다른 인자에 엉뚱한 값이 들어갔다
+        (get_market_investor_flow days, 2026-11-02 실호출 비교: strict 3/3 누락, 해제 3/3 정확).
+        strict 는 요청 전체에서 도구 수·선택 인자 합계 한도가 있다 (STRICT_TOOL_LIMIT·STRICT_OPTIONAL_LIMIT)
+        """
+        if self.strict_override is not None:
+            return self.strict_override
+        props = self.input_schema.get("properties", {}).values()
+        if any(p.get("enum") and p.get("type") != "string" for p in props):
+            return False
+        return len(self.input_schema.get("required", [])) > 0
 
     def to_anthropic(self) -> dict[str, Any]:
         """수치·길이·배열 제약은 strict 가 지원하지 않는다. 범위 검사는 Kotlin 이 한다 (DataToolService 상수)"""
@@ -47,6 +62,10 @@ class ToolSpec:
 
 
 STRICT_OPTIONAL_LIMIT = 24
+# strict 도구 개수도 요청 전체에서 20개까지 (넘으면 API 400, 2026-10-31 실호출 확인).
+# 해석 노드가 붙이는 가짜 도구(reject·ask_user, app/chat/prompts.py) 2개가 strict 라 여기 도구는 18개까지
+STRICT_TOOL_LIMIT = 20
+_FAKE_STRICT_TOOLS = 2
 
 
 # strict 스키마가 지원하지 않는 키 (Anthropic 구조화 출력 제한)
@@ -88,6 +107,9 @@ _DATE = {
     "description": "질문에 날짜가 있을 때만. '오늘' → TODAY, '어제' → YESTERDAY, "
     "그 밖의 날짜('10월 15일', '그제', '지난주 금요일')는 YYYY-MM-DD. '지금'·'현재'·'최근'이거나 날짜가 없으면 비운다",
 }
+
+# 리밸런싱 비중 방향 — 웹 리밸런싱 화면과 같은 MIN(이상)·MAX(이하)
+_RATIO_DIRECTION = {"type": "string", "enum": ["MIN", "MAX"], "description": "MIN=이상(하한), MAX=이하(상한)"}
 
 _SPECS: list[ToolSpec] = [
     # ── 데이터 도구 ──
@@ -173,7 +195,6 @@ _SPECS: list[ToolSpec] = [
             },
             ["investor", "side"],
         ),
-        strict=False,  # 선택 인자가 많아 strict 한도(24) 때문에 해제, 값 검증은 Kotlin
     ),
     ToolSpec(
         "get_trading_rank",
@@ -369,7 +390,6 @@ _SPECS: list[ToolSpec] = [
                 "group": {"type": "string", "description": "질문에 그룹 이름이 있을 때만 (예: 반도체)"},
             }
         ),
-        strict=False,  # 선택 인자 2개 — strict 한도(24) 때문에 해제, 그룹 이름 대조는 Kotlin
     ),
     # ── 표시 도구 (개인 데이터 → 카드 참조) ──
     ToolSpec(
@@ -387,7 +407,6 @@ _SPECS: list[ToolSpec] = [
                 "totalRateGt": {"type": "number", "description": "총 수익률이 이 값 초과인 종목만"},
             }
         ),
-        strict=False,  # 선택 인자 5개 — strict 한도(24) 때문에 해제, 값 검증은 Kotlin
     ),
     ToolSpec(
         "show_my_holding",
@@ -415,6 +434,14 @@ _SPECS: list[ToolSpec] = [
         "/internal/assistant/tools/show_my_goals",
         "투자 목표 카드 (총 자산·월간 실현손익·연간 실현손익 목표의 목표 금액·현재 금액·달성률). "
         "예: '내 투자 목표', '목표 달성률 어때', '이달 목표 얼마나 남았어'",
+    ),
+    ToolSpec(
+        "show_my_rebalancing",
+        ToolKind.DISPLAY,
+        "/internal/assistant/tools/show_my_rebalancing",
+        "리밸런싱 카드 (주식·코인·현금 목표 비중과 현재 비중, 미달·초과 여부, "
+        "종목 최대 비중을 넘은 종목과 매도 제안 수량). "
+        "예: '리밸런싱 현황', '내 비중 어때', '비중 초과한 종목 있어', '리밸런싱 설정 보여줘'",
     ),
     ToolSpec(
         "show_briefing",
@@ -461,7 +488,6 @@ _SPECS: list[ToolSpec] = [
             },
             ["stockQuery"],
         ),
-        strict=False,  # 선택 인자 1개 — strict 한도(24) 때문에 해제, 값 검증은 Kotlin (2026-10-28)
     ),
     ToolSpec(
         "update_my_goal",
@@ -482,13 +508,34 @@ _SPECS: list[ToolSpec] = [
         ),
         secondary_auth=True,  # 웹 투자 목표(/api/goals)가 2차 인증 메뉴 (2026-10-27)
     ),
+    ToolSpec(
+        "update_my_rebalancing",
+        ToolKind.ACTION,
+        "/internal/assistant/tools/update_my_rebalancing/preview",
+        "리밸런싱 비중 설정 변경 확인 카드. 말한 항목만 넣고 나머지는 기존 설정을 유지한다 (설정이 없으면 새로 설정). "
+        "비중 방향: '이하'·'넘지 않게'·'최대' → MAX, '이상'·'최소'·'밑으로 가지 않게' → MIN. "
+        "방향을 말하지 않으면 방향 인자는 비운다. "
+        "예: '주식 비중 60% 이하로 바꿔줘', '현금 최소 10%로', '종목 최대 비중 15%로', '코인 비중 5%로 줄여줘'",
+        _obj(
+            {
+                "stockRatio": {"type": "integer", "description": "주식 목표 비중 (%, 0~100)"},
+                "stockDirection": _RATIO_DIRECTION,
+                "cryptoRatio": {"type": "integer", "description": "코인 목표 비중 (%, 0~100)"},
+                "cryptoDirection": _RATIO_DIRECTION,
+                "cashRatio": {"type": "integer", "description": "현금 목표 비중 (%, 0~100)"},
+                "cashDirection": _RATIO_DIRECTION,
+                "maxStockRatio": {"type": "integer", "description": "종목 하나의 최대 비중 (%, 1~100)"},
+            }
+        ),
+        secondary_auth=True,  # 웹 리밸런싱(/api/rebalancing)이 2차 인증 메뉴 (2026-10-31)
+    ),
 ]
 
 REGISTRY: dict[str, ToolSpec] = {t.name: t for t in _SPECS}
 
 
 def requires_personal(name: str) -> bool:
-    """2차 인증 토큰이 있어야 실행하는 도구인가 — 표시 도구 전부 + secondary_auth 실행 도구(투자 목표 변경).
+    """2차 인증 토큰이 있어야 실행하는 도구인가 — 표시 도구 전부 + secondary_auth 실행 도구(투자 목표·리밸런싱 변경).
     Kotlin ServiceTokenFilter 도 같은 기준으로 막는다.
 
     목표가 알림은 웹 알림 설정이 2차 인증 대상이 아니라 제외한다 (2026-10-27). 기준은 웹 SecondaryAuthFilter 경로
@@ -500,7 +547,15 @@ def requires_personal(name: str) -> bool:
 def _check_strict_budget() -> None:
     total = sum(t.optional_count() for t in _SPECS if t.strict)
     if total > STRICT_OPTIONAL_LIMIT:
-        raise RuntimeError(f"strict 선택 인자 {total}개 > 한도 {STRICT_OPTIONAL_LIMIT}: 일부 도구를 strict=False 로")
+        raise RuntimeError(
+            f"strict 선택 인자 {total}개 > 한도 {STRICT_OPTIONAL_LIMIT}: "
+            "선택 인자가 많은 도구를 strict_override=False 로"
+        )
+    count = sum(1 for t in _SPECS if t.strict) + _FAKE_STRICT_TOOLS
+    if count > STRICT_TOOL_LIMIT:
+        raise RuntimeError(
+            f"strict 도구 {count}개 > 한도 {STRICT_TOOL_LIMIT}: 규칙을 다시 정하거나 strict_override=False 로"
+        )
 
 
 _check_strict_budget()

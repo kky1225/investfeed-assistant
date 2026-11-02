@@ -40,6 +40,8 @@ def _final_reply(ctx: TurnContext) -> str:
         return replies.CONFIRM_ALERT_DELETE
     if "CONFIRM_GOAL" in kinds:  # 투자 목표 변경 확인 카드 (개인 카드 참조, Kotlin ActionToolService)
         return replies.CONFIRM_GOAL
+    if "CONFIRM_REBALANCING" in kinds:  # 리밸런싱 비중 변경 확인 카드 (개인 카드 참조, Kotlin ActionToolService)
+        return replies.CONFIRM_REBALANCING
     if ctx.cards and all(c.get("error") for c in ctx.cards):
         return replies.ALL_FAILED
     return replies.DONE
@@ -71,7 +73,8 @@ async def run_turn(
     state: dict[str, Any] = {}
     try:
         async with asyncio.timeout(deps.settings.chat_timeout_seconds):
-            # ainvoke 대신 astream: 단계마다 상태를 받아 두어, 실행 중 타임아웃이 나도 interpret 까지의 상태(calls)가 남는다
+            # ainvoke 대신 astream: 단계마다 상태를 받아 두어,
+            # 실행 중 타임아웃이 나도 interpret 까지의 상태(calls)가 남는다
             # → _record_history 가 "이 질문에 이 도구를 쓰려 했다"를 이력에 남겨 다음 질문이 이어받는다
             async for chunk in graph.astream(
                 {
