@@ -50,7 +50,7 @@ class JwksVerifier:
         self._audience = audience
         self._cache_seconds = cache_seconds
         self._keys: dict[str, PyJWK] = {}
-        self._loaded_at = 0.0
+        self._loaded_at: float | None = None  # 0.0 이면 부팅 1시간 안(monotonic < 캐시 시간)에 첫 로드를 건너뛴다
 
     def verify(self, token: str) -> Principal:
         try:
@@ -94,7 +94,7 @@ class JwksVerifier:
         return key
 
     def _stale(self) -> bool:
-        return time.monotonic() - self._loaded_at > self._cache_seconds
+        return self._loaded_at is None or time.monotonic() - self._loaded_at > self._cache_seconds
 
     def _reload(self) -> None:
         jwks = self._fetch()
