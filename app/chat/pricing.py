@@ -17,7 +17,7 @@ class Price:
 
 
 _PRICES: dict[str, Price] = {
-    "claude-sonnet-5-5": Price(2.0, 10.0, 0.20, 2.50),
+    "claude-sonnet-5-5": Price(2.0, 10.0, 0.10, 2.50),  # 캐시 읽기는 입력 ×0.05 (Sonnet 5 는 ×0.1)
     "claude-sonnet-5": Price(2.0, 10.0, 0.20, 2.50),
 }
 
