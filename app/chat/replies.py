@@ -9,7 +9,7 @@ class RejectReason(StrEnum):
     PAPER_TRADE = "PAPER_TRADE"  # 모의투자·자동매매 (관리자 전용, C-12)
     GREETING = "GREETING"  # 인사
     DATE_UNSUPPORTED = "DATE_UNSUPPORTED"  # 날짜 지정 조회를 아직 지원하지 않는 데이터
-    UNSUPPORTED = "UNSUPPORTED"  # 투자 데이터 질문이지만 알맞은 도구가 없는 조회 (종목 업종 소속·재무 지표 등)
+    UNSUPPORTED = "UNSUPPORTED"  # 투자 데이터 질문이지만 알맞은 도구가 없는 조회 (실적·공시·목표주가 등)
     FX_PERIOD = "FX_PERIOD"  # 환율을 여러 날(기간·추이)로 물음 — 환율은 하루 단위만 (2026-10-26)
 
 
