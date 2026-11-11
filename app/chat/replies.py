@@ -32,7 +32,7 @@ class Missing(StrEnum):
 REJECT_TEXT: dict[str, str] = {
     RejectReason.ACTION: "지원하지 않는 질문입니다. 시세·수급·일정 같은 정보 조회만 할 수 있어요.",
     RejectReason.OUT_OF_SCOPE: "투자 데이터 관련 질문만 답할 수 있어요. 시세·수급·일정·내 계좌를 물어보세요.",
-    RejectReason.PAPER_TRADE: "모의투자는 관리자 페이지에서 확인해 주세요.",
+    RejectReason.PAPER_TRADE: "지원하지 않는 기능입니다. 시세·수급·업종·일정 같은 정보를 물어보세요.",
     RejectReason.GREETING: "네, 무엇을 조회해 드릴까요?",
     RejectReason.DATE_UNSUPPORTED: (
         "해당 데이터는 과거 날짜 조회를 지원하지 않습니다. 당일(최근) 데이터만 제공할 수 있습니다."
