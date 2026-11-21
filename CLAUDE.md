@@ -9,7 +9,7 @@ InvestFeed AI 투자 비서의 Python 서비스 (Python 3.14 · FastAPI · LangG
 - 사용자 JWT 는 받지 않는다. 비서 토큰(RS256, JWKS) 만 검증하고 Kotlin `/internal` 에는 같은 토큰을 전파한다
 - 브리핑·알림·타임라인은 Kotlin 소유. 이 서비스는 질문 턴만 만들고 결과를 Kotlin 타임라인에 append 한다
 - 모의투자 데이터는 다루지 않는다 (관리자 전용, C-12)
-- 의존성은 `uv add` 로만 추가하고 `uv.lock` 을 커밋한다. 업그레이드는 `uv lock --upgrade` 후 테스트 통과 시만
+- 의존성은 `uv add` 로만 추가하고(사용자 확인 후), 바뀐 `uv.lock` 도 커밋 초안에 포함한다. 업그레이드는 `uv lock --upgrade` 후 테스트 통과 시만
 
 ## 구조 (app/)
 - main.py: FastAPI 앱, lifespan 에서 의존성(Redis·CoreClient·Anthropic·JWKS 검증기) 생성
@@ -33,11 +33,3 @@ InvestFeed AI 투자 비서의 Python 서비스 (Python 3.14 · FastAPI · LangG
 - 함수 인자·반환값에 타입 힌트를 단다
 - 모듈 docstring 에 역할과 근거(명세 절·결정 날짜·C-xx)를 적는 기존 방식 유지
 - 요청/응답 모델은 pydantic, 설정은 app/config.py 의 Settings 로만 읽는다
-
-## Git
-- git/gh 명령은 hook으로 차단되어 있음. 커밋·브랜치·push는 사용자가 직접 수행
-- 작업이 끝나면 변경 파일 목록과 커밋 메시지 초안을 제시할 것
-
-## 필수 규칙
-- 소스 파일은 Edit/Write 도구로만 수정할 것. sed·cp·heredoc 등 Bash로 수정하면 lint·Stop hook 검증에서 빠짐
-- 기능 구현 지시가 없으면 질문에 대한 답변이나 제안만 할 것
